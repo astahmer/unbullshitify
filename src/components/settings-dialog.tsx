@@ -36,9 +36,16 @@ export function SettingsDialog({
   if (!open) return null;
 
   const preset = presetById(draft.presetId);
+  const currentKey = draft.apiKeys[draft.presetId] ?? "";
 
   const update = (patch: Partial<Settings>) =>
     setDraft((d) => ({ ...d, ...patch }));
+
+  const setKey = (key: string) =>
+    setDraft((d) => ({
+      ...d,
+      apiKeys: { ...d.apiKeys, [d.presetId]: key },
+    }));
 
   return (
     <div
@@ -77,6 +84,7 @@ export function SettingsDialog({
               {PRESETS.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
+                  {draft.apiKeys[p.id] ? " ✓" : ""}
                 </option>
               ))}
             </Select>
@@ -110,7 +118,9 @@ export function SettingsDialog({
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <Label htmlFor="apikey">API key</Label>
+              <Label htmlFor="apikey">
+                API key{preset ? ` — ${preset.name}` : ""}
+              </Label>
               {preset?.keyUrl && (
                 <a
                   href={preset.keyUrl}
@@ -126,9 +136,13 @@ export function SettingsDialog({
               <Input
                 id="apikey"
                 type={showKey ? "text" : "password"}
-                placeholder={settings.apiKey ? redactKey(settings.apiKey) : "sk-…"}
-                value={draft.apiKey}
-                onChange={(e) => update({ apiKey: e.target.value })}
+                placeholder={
+                  settings.apiKeys[draft.presetId]
+                    ? redactKey(settings.apiKeys[draft.presetId])
+                    : "sk-…"
+                }
+                value={currentKey}
+                onChange={(e) => setKey(e.target.value)}
                 className="pr-9"
               />
               <button
@@ -142,8 +156,8 @@ export function SettingsDialog({
             </div>
             <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
               <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-primary" />
-              Stored in this browser's localStorage only. Requests go straight
-              from your browser to the provider — there is no backend.
+              Keys are stored in this browser's localStorage only (one per
+              provider) and sent straight to the provider — there is no backend.
             </p>
           </div>
 
@@ -152,7 +166,7 @@ export function SettingsDialog({
               Cancel
             </Button>
             <Button
-              disabled={!draft.baseURL || !draft.model || !draft.apiKey}
+              disabled={!draft.baseURL || !draft.model || !currentKey.trim()}
               onClick={() => {
                 onSave(draft);
                 onClose();

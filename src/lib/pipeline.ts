@@ -3,6 +3,7 @@ import { openaiCompatibleText } from "@tanstack/ai-openai/compatible";
 import type { ModelMessage } from "@tanstack/ai";
 import { Data, Effect, Exit, Schedule } from "effect";
 import type { Settings } from "./settings";
+import { activeApiKey } from "./settings.ts";
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -63,7 +64,7 @@ const streamChat = ({
       try {
         const adapter = openaiCompatibleText(settings.model, {
           baseURL: settings.baseURL,
-          apiKey: settings.apiKey,
+          apiKey: activeApiKey(settings),
           dangerouslyAllowBrowser: true,
         });
         const stream = chat({

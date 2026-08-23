@@ -1,9 +1,10 @@
 export interface Settings {
   presetId: string;
   baseURL: string;
-  apiKey: string;
   model: string;
   rounds: number;
+  /** one key per provider preset, so switching providers keeps keys */
+  apiKeys: Record<string, string>;
 }
 
 export interface ProviderPreset {
@@ -15,8 +16,8 @@ export interface ProviderPreset {
 }
 
 /**
- * Any OpenAI-compatible endpoint works. The API key is kept in localStorage and
- * sent directly from the browser to the provider — there is no backend.
+ * Any OpenAI-compatible endpoint works. Keys are kept in localStorage and sent
+ * directly from the browser to the provider — there is no backend.
  */
 export const PRESETS: ProviderPreset[] = [
   {
@@ -66,21 +67,43 @@ export const PRESETS: ProviderPreset[] = [
   },
 ];
 
-const STORAGE_KEY = "unbullshitify.settings.v1";
+const STORAGE_KEY = "unbullshitify.settings.v2";
 
 export const DEFAULT_SETTINGS: Settings = {
   presetId: "openrouter",
   baseURL: PRESETS[1].baseURL,
-  apiKey: "",
   model: "anthropic/claude-sonnet-4.5",
   rounds: 2,
+  apiKeys: {},
 };
+
+export function activeApiKey(settings: Settings): string {
+  return settings.apiKeys?.[settings.presetId] ?? "";
+}
 
 export function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_SETTINGS;
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    const parsed = JSON.parse(raw) as Partial<Settings>;
+    // migrate v1 single-key storage if present
+    const legacy = localStorage.getItem("unbullshitify.settings.v1");
+    let migratedKeys: Record<string, string> | undefined;
+    if (legacy) {
+      try {
+        const v1 = JSON.parse(legacy) as { presetId?: string; apiKey?: string };
+        if (v1.presetId && v1.apiKey) {
+          migratedKeys = { [v1.presetId]: v1.apiKey };
+        }
+      } catch {
+        // ignore corrupt legacy data
+      }
+    }
+    return {
+      ...DEFAULT_SETTINGS,
+      ...parsed,
+      apiKeys: { ...(migratedKeys ?? {}), ...(parsed.apiKeys ?? {}) },
+    };
   } catch {
     return DEFAULT_SETTINGS;
   }

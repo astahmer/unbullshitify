@@ -104,9 +104,9 @@ const events = [];
 const settings = {
   presetId: "custom",
   baseURL: "https://mock.local/v1",
-  apiKey: "sk-test",
   model: "test-model",
   rounds: 1,
+  apiKeys: { custom: "sk-test" },
 };
 
 const exit = await Effect.runPromiseExit(

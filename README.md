@@ -2,9 +2,10 @@
 
 Paste a GPT-generated message → get back the prompt that most likely produced it.
 
-**BYOK (Bring Your Own Key)**: everything runs client-side. Your API key lives in
-your browser's localStorage and requests go directly from your browser to your
-provider — there is no backend.
+**BYOK (Bring Your Own Key)**: everything runs client-side. API keys live in
+your browser's localStorage — one per provider, so switching presets keeps
+each key — and requests go directly from your browser to your provider. There
+is no backend.
 
 ## Stack
 
@@ -39,6 +40,23 @@ pnpm test                     # headless pipeline tests (mocked SSE provider)
 pnpm build && pnpm smoke      # boot the built bundle in jsdom
 ```
 
-Providers: any OpenAI-compatible endpoint works out of the box (OpenAI,
-OpenRouter, Groq, Mistral, local Ollama, or a custom base URL). Browser CORS is
-supported by all of the presets.
+Providers: presets for OpenAI, OpenRouter, Groq, Mistral and local Ollama are
+built in (one key stored per provider), plus a custom base URL for anything
+else OpenAI-compatible. Browser CORS is supported by all of the presets.
+
+## Deploy (Cloudflare Workers, via Alchemy)
+
+The Worker serves only the static SPA build — no bindings, no secrets, nothing
+to leak. Keys never touch the server. The Alchemy stack lives in
+`packages/infra` (isolated deps: alchemy needs effect 4 while the app stays on
+3.x).
+
+```sh
+# once: CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID env vars, or `alchemy login`
+pnpm deploy     # = pnpm build && alchemy deploy (from packages/infra)
+pnpm destroy    # tear down
+```
+
+Stack definition: `alchemy.run.ts` (assets-only Worker, SPA fallback). Note:
+never leave `alchemy dev` running against the deployed worker — it replaces the
+live worker with a local bridge stub until the next `alchemy deploy`.

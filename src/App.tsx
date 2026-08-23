@@ -11,6 +11,7 @@ import { IdleHint, PipelineView, RunningHint } from "@/components/pipeline-view"
 import { ResultPanel } from "@/components/result-panel";
 import { useUnbullshitify } from "@/hooks/use-unbullshitify";
 import {
+  activeApiKey,
   loadSettings,
   presetById,
   redactKey,
@@ -40,7 +41,9 @@ export default function App() {
 
   const { state, run, cancel } = useUnbullshitify(settings);
 
-  const configured = Boolean(settings.apiKey && settings.baseURL && settings.model);
+  const configured = Boolean(
+    activeApiKey(settings) && settings.baseURL && settings.model,
+  );
   const running = state.status === "running";
   const canRun = configured && input.trim().length > 40 && !running;
 
@@ -71,7 +74,7 @@ export default function App() {
             {configured ? (
               <span className="flex items-center gap-1.5">
                 {presetName}
-                <span className="size-1.5 rounded-full bg-primary" title={redactKey(settings.apiKey)} />
+                <span className="size-1.5 rounded-full bg-primary" title={redactKey(activeApiKey(settings))} />
               </span>
             ) : (
               <span className="text-destructive">Add API key</span>
