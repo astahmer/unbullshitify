@@ -1,9 +1,6 @@
 import { useEffect, useState } from "react";
-import { Eye, EyeOff, ExternalLink, KeyRound, ShieldCheck, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
+import { Eye, EyeSlash, Key, ShieldCheck, X } from "@phosphor-icons/react";
+import { Button, Dialog, Field, Input, Select } from "@/components/kumo";
 import {
   PRESETS,
   type Settings,
@@ -37,42 +34,48 @@ export function SettingsDialog({
 
   const preset = presetById(draft.presetId);
   const currentKey = draft.apiKeys[draft.presetId] ?? "";
+  const canSave = Boolean(draft.baseURL && draft.model && currentKey.trim());
 
   const update = (patch: Partial<Settings>) =>
     setDraft((d) => ({ ...d, ...patch }));
 
-  const setKey = (key: string) =>
-    setDraft((d) => ({
-      ...d,
-      apiKeys: { ...d.apiKeys, [d.presetId]: key },
-    }));
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 p-4 pt-[10vh] backdrop-blur-sm"
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    <Dialog.Root
+      open={open}
+      onOpenChange={(o) => !o && onClose()}
     >
-      <div className="w-full max-w-md rounded-lg border border-border bg-popover p-5 shadow-xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="flex items-center gap-2 font-semibold">
-            <KeyRound className="size-4 text-primary" />
-            Provider settings
-          </h2>
-          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
-            <X />
-          </Button>
+      <Dialog className="w-[26rem] p-6">
+        <div className="mb-4 flex items-start justify-between gap-4 border-b border-kumo-line pb-3">
+          <Dialog.Title className="text-xl font-semibold">
+            <span className="flex items-center gap-2">
+              <Key className="text-kumo-brand" />
+              Provider settings
+            </span>
+          </Dialog.Title>
+          <Dialog.Close
+            render={(props) => (
+              <Button
+                {...props}
+                variant="ghost"
+                shape="square"
+                size="sm"
+                icon={<X />}
+                aria-label={"Close"}
+              />
+            )}
+          />
         </div>
 
         <div className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="preset">Provider (OpenAI-compatible)</Label>
+          <Field label="Provider" description="Any OpenAI-compatible endpoint.">
             <Select
-              id="preset"
+              aria-label="Provider"
               value={draft.presetId}
-              onChange={(e) => {
-                const p = presetById(e.target.value);
+              onValueChange={(v) => {
+                const id = v ?? draft.presetId;
+                const p = presetById(id);
                 update({
-                  presetId: e.target.value,
+                  presetId: id,
                   baseURL: p?.baseURL ?? draft.baseURL,
                   model:
                     p && p.models.length > 0 && !p.models.includes(draft.model)
@@ -80,28 +83,25 @@ export function SettingsDialog({
                       : draft.model,
                 });
               }}
-            >
-              {PRESETS.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                  {draft.apiKeys[p.id] ? " ✓" : ""}
-                </option>
-              ))}
-            </Select>
-          </div>
+              items={Object.fromEntries(
+                PRESETS.map((p) => [
+                  p.id,
+                  `${p.name}${draft.apiKeys[p.id] ? " ✓" : ""}`,
+                ]),
+              )}
+            />
+          </Field>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="baseurl">Base URL</Label>
+          <Field label="Base URL">
             <Input
               id="baseurl"
               placeholder="https://api.example.com/v1"
               value={draft.baseURL}
               onChange={(e) => update({ baseURL: e.target.value.trim() })}
             />
-          </div>
+          </Field>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="model">Model</Label>
+          <Field label="Model">
             <Input
               id="model"
               list="model-suggestions"
@@ -114,27 +114,20 @@ export function SettingsDialog({
                 <option key={m} value={m} />
               ))}
             </datalist>
-          </div>
+          </Field>
 
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="apikey">
-                API key{preset ? ` — ${preset.name}` : ""}
-              </Label>
-              {preset?.keyUrl && (
-                <a
-                  href={preset.keyUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"
-                >
-                  get a key <ExternalLink className="size-3" />
-                </a>
-              )}
-            </div>
+          <Field
+            label={`API key${preset ? ` — ${preset.name}` : ""}`}
+            description={
+              <span className="flex items-start gap-1.5">
+                <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-kumo-success" />
+                Stored in this browser only (one per provider) — there is no
+                backend.
+              </span>
+            }
+          >
             <div className="relative">
               <Input
-                id="apikey"
                 type={showKey ? "text" : "password"}
                 placeholder={
                   settings.apiKeys[draft.presetId]
@@ -142,31 +135,42 @@ export function SettingsDialog({
                     : "sk-…"
                 }
                 value={currentKey}
-                onChange={(e) => setKey(e.target.value)}
+                onChange={(e) =>
+                  update({
+                    apiKeys: { ...draft.apiKeys, [draft.presetId]: e.target.value },
+                  })
+                }
                 className="pr-9"
               />
               <button
                 type="button"
                 onClick={() => setShowKey((v) => !v)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer border-none bg-transparent p-0 text-kumo-subtle hover:text-kumo-default"
                 aria-label={showKey ? "Hide key" : "Show key"}
               >
-                {showKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                {showKey ? <EyeSlash className="size-4" /> : <Eye className="size-4" />}
               </button>
             </div>
-            <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
-              <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-primary" />
-              Keys are stored in this browser's localStorage only (one per
-              provider) and sent straight to the provider — there is no backend.
-            </p>
-          </div>
+          </Field>
+
+          {preset?.keyUrl && (
+            <a
+              href={preset.keyUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="-mt-2 block text-right text-xs text-kumo-link hover:underline"
+            >
+              Get a {preset.name} key →
+            </a>
+          )}
 
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="ghost" onClick={onClose}>
               Cancel
             </Button>
             <Button
-              disabled={!draft.baseURL || !draft.model || !currentKey.trim()}
+              variant="primary"
+              disabled={!canSave}
               onClick={() => {
                 onSave(draft);
                 onClose();
@@ -176,7 +180,8 @@ export function SettingsDialog({
             </Button>
           </div>
         </div>
-      </div>
-    </div>
+      </Dialog>
+    </Dialog.Root>
   );
 }
+

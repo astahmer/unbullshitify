@@ -52,12 +52,12 @@ check(
 check(
   'BYOK configure button present',
   [...doc.querySelectorAll("button")].some((b) =>
-    b.textContent.includes("Configure"),
+    b.textContent.includes("Set API key"),
   ),
 );
 check(
   "pipeline hint rendered",
-  doc.body.textContent.includes("Round-trip inversion"),
+  doc.body.textContent.includes("Reverse-engineered prompt"),
 );
 check(
   "settings dialog closed initially",
@@ -66,7 +66,7 @@ check(
 
 // open the settings dialog and check fields
 const settingsBtn = [...doc.querySelectorAll("button")].find((b) =>
-  b.textContent.includes("Add API key"),
+  b.textContent.includes("Set API key"),
 );
 settingsBtn?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
 await new Promise((r) => setTimeout(r, 100));
@@ -77,7 +77,7 @@ check(
 check(
   "base URL field present",
   [...doc.querySelectorAll("input")].some(
-    (i) => i.id === "baseurl" && i.value.includes("openrouter"),
+    (i) => i.id === "baseurl" && i.value.includes("openrouter.ai"),
   ),
 );
 check(

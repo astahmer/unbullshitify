@@ -1,10 +1,15 @@
 import { useCallback, useMemo, useState } from "react";
-import { AlertTriangle, RotateCcw, Settings2, Square, Wand2 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+import {
+  ArrowClockwise,
+  ArrowRight,
+  Key,
+  Lightbulb,
+  MagicWand,
+  ShieldCheck,
+  Stop,
+  Warning,
+} from "@phosphor-icons/react";
+import { Badge, Button, Select, Textarea, Tooltip, TooltipProvider } from "@/components/kumo";
 import { CopyButton } from "@/components/copy-button";
 import { SettingsDialog } from "@/components/settings-dialog";
 import { IdleHint, PipelineView, RunningHint } from "@/components/pipeline-view";
@@ -58,146 +63,217 @@ export default function App() {
   );
 
   return (
-    <div className="min-h-screen">
-      <div className="bg-grid pointer-events-none fixed inset-0" aria-hidden />
+    <TooltipProvider>
+      <div className="min-h-screen bg-kumo-canvas text-kumo-default">
+        <div className="bg-grid pointer-events-none fixed inset-0" aria-hidden />
 
-      <header className="relative border-b border-border/60 bg-background/80 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3.5">
-          <h1 className="flex items-baseline gap-2 text-lg font-bold tracking-tight">
-            unbullshitify
-            <span className="hidden text-xs font-normal text-muted-foreground sm:inline">
-              GPT output → original prompt
-            </span>
-          </h1>
-          <Button variant="outline" size="sm" onClick={() => setSettingsOpen(true)}>
-            <Settings2 />
-            {configured ? (
-              <span className="flex items-center gap-1.5">
-                {presetName}
-                <span className="size-1.5 rounded-full bg-primary" title={redactKey(activeApiKey(settings))} />
+        {/* Top bar */}
+        <header className="sticky top-0 z-10 border-b border-kumo-line bg-kumo-canvas/90 backdrop-blur">
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
+            <div className="flex items-baseline gap-3">
+              <h1 className="text-lg font-bold tracking-tight">unbullshitify</h1>
+              <span className="hidden text-xs text-kumo-subtle sm:inline">
+                GPT output → original prompt
               </span>
-            ) : (
-              <span className="text-destructive">Add API key</span>
-            )}
-          </Button>
-        </div>
-      </header>
-
-      <main className="relative mx-auto max-w-5xl space-y-4 px-4 py-6">
-        {!configured && (
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/[0.06] px-4 py-3 text-sm">
-            <p>
-              <span className="font-medium">Bring your own key.</span> Everything
-              runs client-side — pick a provider, paste an OpenAI-compatible key,
-              done.
-            </p>
-            <Button size="sm" onClick={() => setSettingsOpen(true)}>
-              Configure
-            </Button>
+            </div>
+            <div className="flex items-center gap-2">
+              {!configured && (
+                <Badge variant="warning">
+                  No API key
+                </Badge>
+              )}
+              <Tooltip
+                content={
+                  configured
+                    ? `Key configured (${redactKey(activeApiKey(settings))})`
+                    : "No API key yet"
+                }
+                render={
+                  <Button variant="outline" size="sm" onClick={() => setSettingsOpen(true)} />
+                }
+              >
+                <Key weight="fill" />
+                {configured ? (
+                  <>
+                    {presetName}
+                    <span className="inline-block size-1.5 rounded-full bg-kumo-success" />
+                  </>
+                ) : (
+                  <>
+                    Set API key
+                    <span className="inline-block size-1.5 rounded-full bg-kumo-warning" />
+                  </>
+                )}
+              </Tooltip>
+            </div>
           </div>
-        )}
+        </header>
 
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
-          {/* Input */}
-          <Card className="self-start">
-            <CardHeader>
-              <CardTitle>The bullshit</CardTitle>
-              <CardDescription>
-                Paste a message that smells AI-generated.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
+        <main className="relative mx-auto max-w-6xl space-y-4 px-4 py-6">
+          {!configured && (
+            <div className="rounded-lg bg-kumo-brand/10 p-3.5 text-sm">
+              <p className="flex items-start gap-2">
+                <ShieldCheck className="mt-0.5 size-4 shrink-0 text-kumo-success" />
+                <span>
+                  <span className="font-medium">Bring your own key.</span>{" "}
+                  <span className="text-kumo-subtle">
+                    Everything runs in your browser — requests go straight to
+                    your provider, keys never leave this device.
+                  </span>
+                </span>
+              </p>
+            </div>
+          )}
+
+          {/* Two-column workspace */}
+          <div className="relative grid items-start gap-4 lg:grid-cols-2">
+            {/* Input → Output connector */}
+            <div
+              className="pointer-events-none absolute left-1/2 top-1/2 z-0 hidden -translate-x-1/2 -translate-y-1/2 lg:block"
+              aria-hidden
+            >
+              <ArrowRight weight="bold" className="size-6 text-kumo-inactive" />
+            </div>
+
+            {/* Input */}
+            <section className="flex h-full flex-col rounded-lg bg-kumo-base p-5 shadow-xs ring ring-kumo-line lg:col-start-1" aria-label="Input">
+              <div className="mb-3 flex items-baseline justify-between gap-2">
+                <h2 className="font-semibold">The bullshit</h2>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setInput((prev) =>
+                      prev ? `${prev}\n\n${EXAMPLE}` : EXAMPLE,
+                    )
+                  }
+                  disabled={running}
+                  className="flex cursor-pointer items-center gap-1 border-none bg-transparent p-0 text-xs text-kumo-link hover:underline disabled:opacity-50"
+                >
+                  <Lightbulb className="size-3.5" />
+                  paste example
+                </button>
+              </div>
+
               <Textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Paste the GPT-generated message here…"
-                className="min-h-[220px] resize-y"
+                rows={9}
+                autoResize={false}
                 spellCheck={false}
+                aria-label="Message to reverse-engineer"
               />
-              <div className="flex flex-wrap items-center gap-3">
-                <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                  Refine rounds
+
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                <label className="flex items-center gap-2 text-sm text-kumo-subtle">
+                  <Tooltip
+                    content="Each round regenerates from the candidate prompt and refines it. More rounds = sharper result, more API calls."
+                    side="top"
+                    render={<span tabIndex={0} />}
+                  >
+                    Refine rounds
+                  </Tooltip>
                   <Select
-                    value={String(settings.rounds)}
-                    disabled={running}
-                    onChange={(e) =>
-                      setSettings((s) => {
-                        const next = { ...s, rounds: Number(e.target.value) };
-                        saveSettings(next);
-                        return next;
-                      })
-                    }
-                    className="h-7 w-[4.5rem] text-xs"
-                  >
-                    {[0, 1, 2, 3, 4].map((n) => (
-                      <option key={n} value={n}>
-                        {n}
-                      </option>
-                    ))}
-                  </Select>
-                </label>
-                <span className="ml-auto flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setInput(EXAMPLE)}
-                    className="cursor-pointer text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                  >
-                    try an example
-                  </button>
+                      value={String(settings.rounds)}
+                      disabled={running}
+                      onValueChange={(v) => {
+                        if (v === null) return;
+                        setSettings((s) => {
+                          const next = { ...s, rounds: Number(v) };
+                          saveSettings(next);
+                          return next;
+                        });
+                      }}
+                      size="xs"
+                      aria-label="Number of refinement rounds"
+                      items={{
+                        "0": "0",
+                        "1": "1",
+                        "2": "2 (recommended)",
+                        "3": "3",
+                        "4": "4",
+                      }}
+                      className="w-[9.5rem]"
+                    />
+                  </label>
+                <div className="ml-auto flex items-center gap-2">
                   {input.length > 0 && (
-                    <span className="text-xs tabular-nums text-muted-foreground">
-                      {input.length.toLocaleString()}
+                    <span className="text-xs tabular-nums text-kumo-subtle">
+                      {input.length.toLocaleString()} chars
                     </span>
                   )}
-                </span>
+                  {state.status === "done" && !running && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={<ArrowClockwise />}
+                      onClick={() => run(input)}
+                    >
+                      Re-run
+                    </Button>
+                  )}
+                </div>
               </div>
-              <div className="flex items-center gap-2">
+
+              <div className="mt-3 flex flex-wrap items-center gap-3">
                 {running ? (
                   <>
-                    <Button variant="destructive" onClick={cancel}>
-                      <Square /> Stop
+                    <Button variant="secondary-destructive" onClick={cancel}>
+                      <Stop weight="fill" /> Stop
                     </Button>
                     <RunningHint />
                   </>
                 ) : (
                   <>
-                    <Button disabled={!canRun} onClick={() => run(input)}>
-                      <Wand2 /> Unbullshitify
-                    </Button>
-                    {state.status === "done" || state.status === "error" ? (
-                      <Badge variant="outline">finished</Badge>
-                    ) : null}
+                    {!configured ? (
+                      <Button
+                        variant="primary"
+                        onClick={() => setSettingsOpen(true)}
+                      >
+                        <Key weight="fill" /> Add API key to start
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="primary"
+                        disabled={!canRun}
+                        onClick={() => run(input)}
+                      >
+                        <MagicWand weight="fill" /> Unbullshitify
+                      </Button>
+                    )}
                   </>
                 )}
               </div>
-              {input.trim().length > 0 && input.trim().length <= 40 && (
-                <p className="text-xs text-muted-foreground">
+
+              {input.trim().length > 0 && input.trim().length <= 40 && !running && (
+                <p className="mt-2 text-xs text-kumo-warning">
                   A bit short — longer messages give the analysis more tells to work with.
                 </p>
               )}
               {state.error && (
-                <p className="flex items-start gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 p-2.5 text-xs leading-relaxed text-destructive">
-                  <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                <p className="mt-3 flex items-start gap-1.5 rounded-md bg-kumo-danger/10 p-2.5 text-xs leading-relaxed text-kumo-danger ring ring-kumo-danger/30">
+                  <Warning className="mt-0.5 size-3.5 shrink-0" />
                   {state.error}
                 </p>
               )}
               {state.status === "cancelled" && (
-                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <RotateCcw className="size-3" /> Cancelled — partial results above.
+                <p className="mt-3 flex items-center gap-1.5 text-xs text-kumo-subtle">
+                  Cancelled — partial results kept on the right.
                 </p>
               )}
-            </CardContent>
-          </Card>
+            </section>
 
-          {/* Pipeline + result */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Reverse-engineered prompt</CardTitle>
-              <CardDescription>
-                Round-trip inversion: draft → regenerate → diff → refine.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+            {/* Output */}
+            <section
+              className="relative z-10 flex h-full flex-col rounded-lg bg-kumo-base p-5 shadow-xs ring ring-kumo-line"
+              aria-label="Result"
+            >
+              <div className="mb-3 flex items-baseline justify-between gap-2">
+                <h2 className="font-semibold">Reverse-engineered prompt</h2>
+                {state.result && (
+                  <CopyButton text={state.result.finalPrompt} label="Copy prompt" />
+                )}
+              </div>
               {state.steps.length > 0 ? (
                 <PipelineView steps={state.steps} />
               ) : (
@@ -205,38 +281,26 @@ export default function App() {
               )}
               {state.result && (
                 <>
-                  <hr className="border-border/60" />
+                  <hr className="my-4 border-kumo-line" />
                   <ResultPanel result={state.result} />
                 </>
               )}
-              {state.status === "idle" &&
-                state.steps.length === 0 &&
-                input.length === 0 && (
-                  <p className="text-right text-xs text-muted-foreground">
-                    Your key stays in your browser ·{" "}
-                    <CopyButton
-                      text={window.location.href}
-                      label="Share app"
-                      className="ml-1"
-                    />
-                  </p>
-                )}
-            </CardContent>
-          </Card>
-        </div>
-      </main>
+            </section>
+          </div>
+        </main>
 
-      <footer className="relative mx-auto max-w-5xl px-4 pb-8 pt-2 text-center text-xs text-muted-foreground">
-        Approximate reconstruction — prompts are guessed from stylistic and
-        structural evidence, not extracted verbatim.
-      </footer>
+        <footer className="relative mx-auto max-w-6xl px-4 pb-8 pt-2 text-center text-xs text-kumo-subtle">
+          Approximate reconstruction — prompts are inferred from stylistic and
+          structural evidence, not extracted verbatim. Keys stay in your browser.
+        </footer>
 
-      <SettingsDialog
-        open={settingsOpen}
-        settings={settings}
-        onClose={() => setSettingsOpen(false)}
-        onSave={handleSave}
-      />
-    </div>
+        <SettingsDialog
+          open={settingsOpen}
+          settings={settings}
+          onClose={() => setSettingsOpen(false)}
+          onSave={handleSave}
+        />
+      </div>
+    </TooltipProvider>
   );
 }
