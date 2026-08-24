@@ -1,28 +1,38 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowClockwise,
   ArrowRight,
   Key,
   Lightbulb,
   MagicWand,
+  Moon,
   ShieldCheck,
   Stop,
+  Sun,
   Warning,
 } from "@phosphor-icons/react";
-import { Badge, Button, Select, Textarea, Tooltip, TooltipProvider } from "@/components/kumo";
+import { Button, Select, Textarea, Tooltip, TooltipProvider } from "@/components/kumo";
 import { CopyButton } from "@/components/copy-button";
 import { SettingsDialog } from "@/components/settings-dialog";
 import { IdleHint, PipelineView, RunningHint } from "@/components/pipeline-view";
 import { ResultPanel } from "@/components/result-panel";
+import { ModelPicker } from "@/components/model-picker";
+import { HistoryPanel } from "@/components/history-panel";
 import { useUnbullshitify } from "@/hooks/use-unbullshitify";
 import {
   activeApiKey,
   loadSettings,
   presetById,
-  redactKey,
   saveSettings,
   type Settings,
 } from "@/lib/settings";
+import {
+  decodeShare,
+  loadHistory,
+  shareIsTooLarge,
+  shareUrl,
+  type HistoryEntry,
+} from "@/lib/share";
 
 const EXAMPLE = `Great question! I'd be happy to help you with that. 🚀
 
@@ -39,12 +49,51 @@ Distributed systems require robust logging, tracing, and metrics from day one.
 
 TL;DR: Start small, automate everything, and iterate. Let me know if you'd like me to elaborate on any of these points! 😊`;
 
+function useThemeMode() {
+  const [mode, setMode] = useState<"dark" | "light">(() => {
+    const saved = localStorage.getItem("unbullshitify.mode");
+    return saved === "light" ? "light" : "dark";
+  });
+  useEffect(() => {
+    document.documentElement.dataset.mode = mode;
+    localStorage.setItem("unbullshitify.mode", mode);
+  }, [mode]);
+  return [mode, () => setMode((m) => (m === "dark" ? "light" : "dark"))] as const;
+}
+
 export default function App() {
   const [settings, setSettings] = useState<Settings>(loadSettings);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [input, setInput] = useState("");
+  const [history, setHistory] = useState<HistoryEntry[]>(loadHistory);
+  const [mode, toggleMode] = useThemeMode();
 
-  const { state, run, cancel } = useUnbullshitify(settings);
+  const { state, run, cancel, restore } = useUnbullshitify(settings);
+
+  const prevStatus = useRef(state.status);
+  useEffect(() => {
+    if (prevStatus.current === "running" && state.status === "done") {
+      setHistory(loadHistory());
+    }
+    prevStatus.current = state.status;
+  }, [state.status]);
+
+  // hydrate shared links: #s=<base64url> — also on hashchange, because
+  // pasting a share URL into an already-open tab is a same-document
+  // navigation and would otherwise be ignored
+  useEffect(() => {
+    const hydrate = () => {
+      const shared = decodeShare(location.hash);
+      if (shared) {
+        setInput(shared.input);
+        restore(shared.result);
+        window.history.replaceState(null, "", location.pathname);
+      }
+    };
+    hydrate();
+    window.addEventListener("hashchange", hydrate);
+    return () => window.removeEventListener("hashchange", hydrate);
+  }, [restore]);
 
   const configured = Boolean(
     activeApiKey(settings) && settings.baseURL && settings.model,
@@ -57,14 +106,25 @@ export default function App() {
     saveSettings(s);
   }, []);
 
+  const changeModel = useCallback((model: string) => {
+    setSettings((s) => {
+      const next = { ...s, model };
+      saveSettings(next);
+      return next;
+    });
+  }, []);
+
   const presetName = useMemo(
     () => presetById(settings.presetId)?.name ?? settings.presetId,
     [settings.presetId],
   );
 
+  const canShare = state.status === "done" && state.result !== null &&
+    !shareIsTooLarge({ input, result: state.result });
+
   return (
     <TooltipProvider>
-      <div className="min-h-screen bg-kumo-canvas text-kumo-default">
+      <div className="flex min-h-dvh flex-col bg-kumo-canvas text-kumo-default">
         <div className="bg-grid pointer-events-none fixed inset-0" aria-hidden />
 
         {/* Top bar */}
@@ -73,19 +133,28 @@ export default function App() {
             <div className="flex items-baseline gap-3">
               <h1 className="text-lg font-bold tracking-tight">unbullshitify</h1>
               <span className="hidden text-xs text-kumo-subtle sm:inline">
-                GPT output → original prompt
+                LLM bullshit → original prompt
               </span>
             </div>
             <div className="flex items-center gap-2">
-              {!configured && (
-                <Badge variant="warning">
-                  No API key
-                </Badge>
-              )}
+              <Tooltip
+                content={mode === "dark" ? "Switch to light" : "Switch to dark"}
+                render={
+                  <Button
+                    variant="ghost"
+                    shape="square"
+                    size="sm"
+                    aria-label="Toggle color theme"
+                    onClick={toggleMode}
+                  />
+                }
+              >
+                {mode === "dark" ? <Sun /> : <Moon />}
+              </Tooltip>
               <Tooltip
                 content={
                   configured
-                    ? `Key configured (${redactKey(activeApiKey(settings))})`
+                    ? `Provider settings — key configured`
                     : "No API key yet"
                 }
                 render={
@@ -109,7 +178,8 @@ export default function App() {
           </div>
         </header>
 
-        <main className="relative mx-auto max-w-6xl space-y-4 px-4 py-6">
+        {/* vertically centered workspace */}
+        <main className="relative mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center gap-4 px-4 py-6">
           {!configured && (
             <div className="rounded-lg bg-kumo-brand/10 p-3.5 text-sm">
               <p className="flex items-start gap-2">
@@ -126,7 +196,7 @@ export default function App() {
           )}
 
           {/* Two-column workspace */}
-          <div className="relative grid items-start gap-4 lg:grid-cols-2">
+          <div className="relative grid items-stretch gap-4 lg:grid-cols-2">
             {/* Input → Output connector */}
             <div
               className="pointer-events-none absolute left-1/2 top-1/2 z-0 hidden -translate-x-1/2 -translate-y-1/2 lg:block"
@@ -157,45 +227,42 @@ export default function App() {
               <Textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Paste the GPT-generated message here…"
+                placeholder="Paste the LLM-generated message here…"
                 rows={9}
                 autoResize={false}
                 spellCheck={false}
                 aria-label="Message to reverse-engineer"
               />
 
+              {/* controls: model picker + rounds + counter */}
               <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
                 <label className="flex items-center gap-2 text-sm text-kumo-subtle">
-                  <Tooltip
-                    content="Each round regenerates from the candidate prompt and refines it. More rounds = sharper result, more API calls."
-                    side="top"
-                    render={<span tabIndex={0} />}
-                  >
-                    Refine rounds
-                  </Tooltip>
+                  Model
+                  <ModelPicker
+                    settings={settings}
+                    disabled={running}
+                    onChange={changeModel}
+                  />
+                </label>
+                <label className="flex items-center gap-2 text-sm text-kumo-subtle">
+                  Rounds
                   <Select
-                      value={String(settings.rounds)}
-                      disabled={running}
-                      onValueChange={(v) => {
-                        if (v === null) return;
-                        setSettings((s) => {
-                          const next = { ...s, rounds: Number(v) };
-                          saveSettings(next);
-                          return next;
-                        });
-                      }}
-                      size="xs"
-                      aria-label="Number of refinement rounds"
-                      items={{
-                        "0": "0",
-                        "1": "1",
-                        "2": "2 (recommended)",
-                        "3": "3",
-                        "4": "4",
-                      }}
-                      className="w-[9.5rem]"
-                    />
-                  </label>
+                    value={String(settings.rounds)}
+                    disabled={running}
+                    onValueChange={(v) => {
+                      if (v === null) return;
+                      setSettings((s) => {
+                        const next = { ...s, rounds: Number(v) };
+                        saveSettings(next);
+                        return next;
+                      });
+                    }}
+                    size="xs"
+                    aria-label="Number of refinement rounds"
+                    items={{ "0": "0", "1": "1", "2": "2", "3": "3", "4": "4" }}
+                    className="w-[4.5rem]"
+                  />
+                </label>
                 <div className="ml-auto flex items-center gap-2">
                   {input.length > 0 && (
                     <span className="text-xs tabular-nums text-kumo-subtle">
@@ -233,13 +300,29 @@ export default function App() {
                         <Key weight="fill" /> Add API key to start
                       </Button>
                     ) : (
-                      <Button
-                        variant="primary"
-                        disabled={!canRun}
-                        onClick={() => run(input)}
+                      <Tooltip
+                        content={
+                          canRun
+                            ? "Draft a candidate prompt, then verify & refine it against the original"
+                            : "Paste at least a sentence or two first"
+                        }
+                        side="top"
+                        render={<span tabIndex={0} className="inline-flex" />}
                       >
-                        <MagicWand weight="fill" /> Unbullshitify
-                      </Button>
+                        <Button
+                          variant="primary"
+                          disabled={!canRun}
+                          onClick={() => run(input)}
+                        >
+                          <MagicWand weight="fill" /> Unbullshitify
+                        </Button>
+                      </Tooltip>
+                    )}
+                    {canShare && (
+                      <CopyButton
+                        text={shareUrl({ input, result: state.result! })}
+                        label="Share link"
+                      />
                     )}
                   </>
                 )}
@@ -265,13 +348,19 @@ export default function App() {
 
             {/* Output */}
             <section
-              className="relative z-10 flex h-full flex-col rounded-lg bg-kumo-base p-5 shadow-xs ring ring-kumo-line"
+              className="relative flex h-full flex-col rounded-lg bg-kumo-base p-5 shadow-xs ring ring-kumo-line"
               aria-label="Result"
             >
               <div className="mb-3 flex items-baseline justify-between gap-2">
                 <h2 className="font-semibold">Reverse-engineered prompt</h2>
                 {state.result && (
-                  <CopyButton text={state.result.finalPrompt} label="Copy prompt" />
+                  <div className="flex items-center gap-1.5">
+                    <CopyButton
+                      text={shareUrl({ input, result: state.result })}
+                      label="Share link"
+                    />
+                    <CopyButton text={state.result.finalPrompt} label="Copy prompt" />
+                  </div>
                 )}
               </div>
               {state.steps.length > 0 ? (
@@ -287,9 +376,18 @@ export default function App() {
               )}
             </section>
           </div>
+
+          <HistoryPanel
+            entries={history}
+            onRestore={(e) => {
+              setInput(e.input);
+              restore(e.result);
+            }}
+            onClear={() => setHistory([])}
+          />
         </main>
 
-        <footer className="relative mx-auto max-w-6xl px-4 pb-8 pt-2 text-center text-xs text-kumo-subtle">
+        <footer className="relative mx-auto max-w-6xl px-4 pb-6 pt-2 text-center text-xs text-kumo-subtle">
           Approximate reconstruction — prompts are inferred from stylistic and
           structural evidence, not extracted verbatim. Keys stay in your browser.
         </footer>

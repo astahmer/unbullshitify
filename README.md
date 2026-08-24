@@ -1,6 +1,6 @@
 # unbullshitify
 
-Paste a GPT-generated message → get back the prompt that most likely produced it.
+Paste an LLM-generated message → get back the prompt that most likely produced it.
 
 **BYOK (Bring Your Own Key)**: everything runs client-side. API keys live in
 your browser's localStorage — one per provider, so switching presets keeps

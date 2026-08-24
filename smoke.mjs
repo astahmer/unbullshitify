@@ -85,6 +85,11 @@ check(
   [...doc.querySelectorAll("button")].find((b) => b.textContent === "Save")
     ?.disabled === true,
 );
+check(
+  "model picker present",
+  doc.querySelector('input[aria-label="Model"]') !== null,
+);
+check("history section absent when empty", !doc.body.textContent.includes("History"));
 
 console.log(failures === 0 ? "\nSMOKE OK" : `\nSMOKE FAILED (${failures})`);
 process.exit(failures === 0 ? 0 : 1);

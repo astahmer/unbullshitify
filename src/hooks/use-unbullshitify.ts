@@ -7,6 +7,7 @@ import {
   type UnbullshitResult,
 } from "@/lib/pipeline";
 import type { Settings } from "@/lib/settings";
+import { pushHistory } from "@/lib/share";
 
 export interface StepState {
   stepId: StepKind;
@@ -82,14 +83,26 @@ export function useUnbullshitify(settings: Settings) {
     (input: string) => {
       if (state.status === "running") return;
       setState({ status: "running", steps: [], result: null, error: null });
+      // capture the final result for the history record
+      let capturedResult: UnbullshitResult | undefined;
       const program = unbullshitify({
         input,
         settings,
-        emit: applyEvent,
+        emit: (event) => {
+          if (event.type === "result") capturedResult = event.result;
+          applyEvent(event);
+        },
       }).pipe(
         Effect.onExit((exit) =>
           Effect.sync(() => {
             if (Exit.isSuccess(exit)) {
+              if (capturedResult) {
+                void pushHistory({
+                  input,
+                  result: capturedResult,
+                  model: settings.model,
+                });
+              }
               setState((prev) => ({ ...prev, status: "done" }));
             } else if (Cause.isInterruptedOnly(exit.cause)) {
               setState((prev) => ({
@@ -119,11 +132,22 @@ export function useUnbullshitify(settings: Settings) {
     [settings, state.status, applyEvent],
   );
 
+  /** Hydrate a previous run (history click / shared link). */
+  const restore = useCallback((result: UnbullshitResult) => {
+    fiberRef.current?.unsafeInterruptAsFork(FiberId.none);
+    setState({
+      status: "done",
+      steps: [],
+      result,
+      error: null,
+    });
+  }, []);
+
   const cancel = useCallback(() => {
     fiberRef.current?.unsafeInterruptAsFork(FiberId.none);
   }, []);
 
   const reset = useCallback(() => setState(INITIAL), []);
 
-  return { state, run, cancel, reset };
+  return { state, run, cancel, reset, restore };
 }

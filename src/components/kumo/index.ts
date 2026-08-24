@@ -5,6 +5,7 @@
  */
 export * from "./components/badge";
 export * from "./components/button";
+export * from "./components/combobox";
 export * from "./components/dialog";
 export * from "./components/field";
 export { Input, Textarea, InputArea, inputVariants } from "./components/input";

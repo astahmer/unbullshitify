@@ -53,7 +53,18 @@ Status legend: ✅ fixed · ⏳ deferred (fine to ship, revisit later)
 | Round accordions don't expose expanded state | ✅ `aria-expanded` |
 | Focus rings inside modal unclear in screenshots | ⏳ kumo focus-visible styles exist; needs keyboard walkthrough to verify |
 
-## Deferred ideas (not bugs)
+## Previously deferred — now done
+
+| Item | Status |
+|---|---|
+| Vertical centering on tall viewports | ✅ main is a flex column with `justify-center` (`min-h-dvh` page shell) |
+| Light mode | ✅ `data-mode` toggle in header, persisted; kumo `light-dark()` tokens do the rest |
+| Streaming JSON ugly | ✅ live step view shows only the ANALYSIS prose while running; raw JSON never shown |
+| Run history | ✅ localStorage-backed History panel (12 entries), click to restore input+result, clearable |
+| Unsaved-changes guard in settings dialog | ✅ Escape/outside-click confirm before discarding edits |
+| Share a run | ✅ "Share link" copies a URL with the whole run base64url-encoded in the hash — zero server involvement (hash is never sent anywhere) |
+
+## Remaining ideas (not bugs)
 
 - Vertical centering / min-height choreography for tall viewports.
 - Light-mode support is free with kumo's `light-dark()` tokens — just toggle

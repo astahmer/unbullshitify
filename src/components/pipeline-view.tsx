@@ -25,11 +25,16 @@ function StepRow({ step }: { step: StepState }) {
       >
         {step.label}
       </p>
-      {step.streamedText && (
+      {step.status === "running" && step.streamedText && (
         <pre className="mt-1.5 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-md bg-kumo-tint p-2.5 font-mono text-xs leading-relaxed text-kumo-subtle">
-          {step.streamedText.length > 1200
-            ? "…" + step.streamedText.slice(-1200)
-            : step.streamedText}
+          {/* live view: only the human-readable ANALYSIS section — the JSON
+              block appears once parsing lands it in the result panel */}
+          {(() => {
+            const t = step.streamedText;
+            const cut = t.search(/\n\s*JSON/i);
+            const shown = cut > 0 ? t.slice(0, cut) : t;
+            return shown.length > 1200 ? "…" + shown.slice(-1200) : shown;
+          })()}
         </pre>
       )}
     </div>

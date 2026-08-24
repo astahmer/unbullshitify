@@ -35,6 +35,13 @@ export function SettingsDialog({
   const preset = presetById(draft.presetId);
   const currentKey = draft.apiKeys[draft.presetId] ?? "";
   const canSave = Boolean(draft.baseURL && draft.model && currentKey.trim());
+  const isDirty = JSON.stringify(draft) !== JSON.stringify(settings);
+
+  /** Escape / outside click / Cancel — confirm before throwing edits away. */
+  const requestClose = () => {
+    if (isDirty && !window.confirm("Discard unsaved changes?")) return;
+    onClose();
+  };
 
   const update = (patch: Partial<Settings>) =>
     setDraft((d) => ({ ...d, ...patch }));
@@ -42,7 +49,7 @@ export function SettingsDialog({
   return (
     <Dialog.Root
       open={open}
-      onOpenChange={(o) => !o && onClose()}
+      onOpenChange={(o) => !o && requestClose()}
     >
       <Dialog className="w-[26rem] p-6">
         <div className="mb-4 flex items-start justify-between gap-4 border-b border-kumo-line pb-3">
